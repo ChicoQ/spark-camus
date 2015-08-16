@@ -21,6 +21,7 @@ object CamusJob {
     val configFile = args(0)
     //val delimiter = args(1)
     val delimiter = "\t"
+    val skip = args(1).toLong
 
     val sparkConf = new SparkConf().setAppName("SparkCamusJob")
     val sc = new SparkContext()
@@ -30,8 +31,20 @@ object CamusJob {
 
     val fromOff = OffsetOperator.getWritedOff(sc, config.currOffPath, config.lastPath, delimiter, config.partNum)
     val endOff = OffsetOperator.getOffsetFromFile(sc, config.offsetDir, delimiter, config.partNum)
+
+    /*
+    2015-8-14
+    compare the currentOffset and earliestOffset
+     */
+    val earlyOff = OffsetOperator.getEarliestOff(endOff, config.kc, config.topicPartition)
+    val trueFromOff = for ((k, v) <- fromOff) yield {
+      val truev = if (fromOff(k) > earlyOff(k)) fromOff(k) else (earlyOff(k) + skip)
+      (k, truev)
+    }
+
     val toOff = OffsetOperator.getCurrentOffAndTime(endOff, config.kc, config.topicPartition)
-    val offsets = OffsetOperator.offsetRange(fromOff, toOff)
+    //val offsets = OffsetOperator.offsetRange(fromOff, toOff)
+    val offsets = OffsetOperator.offsetRange(trueFromOff, toOff)
 
     val rdd = KafkaRDD(
       sc,
@@ -110,18 +123,33 @@ object ADlogCamusJob {
 
   def main(args: Array[String]) {
 
+    val skip = args(0).toLong
+
     val sparkConf = new SparkConf().setAppName("ad-SparkCamusJob")
     val sc = new SparkContext()
 
     val props = new Properties()
     //val config = new ConfigSetting(props, "/config.properties.postman.3")
     val config = new ConfigSetting(props, "/adConfig.properties")
+    //val config = new ConfigSetting(props, "/adConfigTemp.properties")
 
     val fromOff = OffsetOperator.getWritedOff(sc, config.currOffPath, config.lastPath, "  ", config.partNum)
+    //val fromOff = OffsetOperator.getWritedOff(sc, config.currOffPath, config.lastPath, "\t", config.partNum)
     val endOff = OffsetOperator.getOffsetFromFile(sc, config.offsetDir, "\t", config.partNum)
-    val toOff = OffsetOperator.getCurrentOffAndTime(endOff, config.kc, config.topicPartition)
 
-    val offsets = OffsetOperator.offsetRange(fromOff, toOff)
+    /*
+    2015-8-14
+    compare the currentOffset and earliestOffset
+     */
+    val earlyOff = OffsetOperator.getEarliestOff(endOff, config.kc, config.topicPartition)
+    val trueFromOff = for ((k, v) <- fromOff) yield {
+      val truev = if (fromOff(k) > earlyOff(k)) fromOff(k) else (earlyOff(k) + skip)
+      (k, truev)
+    }
+
+    val toOff = OffsetOperator.getCurrentOffAndTime(endOff, config.kc, config.topicPartition)
+    //val offsets = OffsetOperator.offsetRange(fromOff, toOff)
+    val offsets = OffsetOperator.offsetRange(trueFromOff, toOff)
 
     val rdd = KafkaRDD(
       sc,
@@ -147,6 +175,31 @@ object ADlogCamusJob {
       "&p=" +
       outputDir
     scala.io.Source.fromURL(url).getLines()
+
+    /*
+    2015-08-11
+    read sequenceFile[NullWritable,BytesWritable]
+     */
+    /*import org.apache.hadoop.io._
+    //val in = args(4)
+    val in = "/extract/chico/sequence/"
+    val res = sc.sequenceFile[NullWritable, BytesWritable](in).flatMap{
+      case (key, value) =>
+        val len = value.getLength
+        val bytes = value.getBytes.slice(0, len)
+        /*try {
+          val p = EventPackage.Package.parseFrom(bytes)
+          val log = decode(p)
+          Some( new GenericRow(log).asInstanceOf[Row] )
+        } catch { case e : Exception => None }*/
+        try {
+          Some(new String(bytes, "UTF8"))
+        } catch {
+          case e : Exception => None
+        }
+    //}.coalesce(fn.toInt,false)
+    }.coalesce(8,false)*/
+
 
   }
 

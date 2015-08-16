@@ -4,6 +4,7 @@ import kafka.common.TopicAndPartition
 import org.apache.hadoop.conf.Configuration
 import org.apache.spark.SparkContext
 import org.apache.spark.rdd.RDD
+import org.apache.spark.storage.StorageLevel
 import org.apache.spark.streaming.kafka.KafkaCluster
 
 /**
@@ -86,6 +87,9 @@ object OffsetOperator {
   def getWritedOff(sc: SparkContext, currOffPath: String, lastPath: String, delimiter: String, partNum: Int) = {
 
     val writedOffData = sc.textFile(currOffPath)
+      .persist(StorageLevel.MEMORY_ONLY_SER_2)
+    println(s"###### $currOffPath")
+    println(s"@@@@ ${writedOffData.collect.mkString(";")}")
 
     writedOffData
       .coalesce(1, true)
@@ -95,6 +99,7 @@ object OffsetOperator {
       val sp = line.split(delimiter)
       (sp(0).toInt -> sp(1).toLong)
     }
+
 
     val writedOff = writedOffRdd.filter{ case (p, o) => p < partNum }
       .collect.toMap
