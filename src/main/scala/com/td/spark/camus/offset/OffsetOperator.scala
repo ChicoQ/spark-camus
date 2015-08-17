@@ -87,9 +87,9 @@ object OffsetOperator {
   def getWritedOff(sc: SparkContext, currOffPath: String, lastPath: String, delimiter: String, partNum: Int) = {
 
     val writedOffData = sc.textFile(currOffPath)
-      .persist(StorageLevel.MEMORY_ONLY_SER_2)
-    println(s"###### $currOffPath")
-    println(s"@@@@ ${writedOffData.collect.mkString(";")}")
+      //.persist(StorageLevel.MEMORY_ONLY_SER_2)
+    /*println(s"###### $currOffPath")
+    println(s"@@@@ ${writedOffData.collect.mkString(";")}")*/
 
     writedOffData
       .coalesce(1, true)
